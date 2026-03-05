@@ -1,0 +1,48 @@
+import torch
+import numpy as np
+import gymnasium as gym
+
+def get_best_device():
+
+    if not torch.cuda.is_available():
+        device = torch.device("cpu")
+        print("No GPU detected. Using CPU.")
+    else:
+        num_gpus = torch.cuda.device_count()
+        max_free = -1
+        best_gpu = 0
+
+        for i in range(num_gpus):
+            props = torch.cuda.get_device_properties(i)
+        
+            total_memory = props.total_memory
+            
+            allocated = torch.cuda.memory_allocated(i)
+            reserved = torch.cuda.memory_reserved(i)
+           
+            free_memory = total_memory - (allocated + reserved)
+
+            print(f"GPU {i}: total {total_memory/1e6:.0f}MB, free {free_memory/1e6:.0f}MB")
+
+            if free_memory > max_free:
+                max_free = free_memory
+                best_gpu = i
+
+        device = torch.device(f"cuda:{best_gpu}")
+        print(f"Using GPU {best_gpu} with approx {max_free/1e6:.0f} MB free memory.")
+    return device
+
+
+def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:np.ndarray):
+    """Normalize observations to 0~1.
+
+    :param gym.Env env: the environment to wrap.
+    """
+    if isinstance(observation_space,gym.spaces.Box) and len(observation_space.shape)==3 and observation_space.low==0 and observation_space.high==255:
+        return states.float() / 255.0
+    else:
+        return states
+
+
+if __name__ == "__main__":
+    print(get_best_device())

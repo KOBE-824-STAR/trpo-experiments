@@ -1,0 +1,9 @@
+env:
+  name: Breakout-v5
+  num_training_envs: 8
+  num_testing_envs: 8
+algorithm:
+  name: DQN
+device: cuda
+experoment_name: ${env.name}-${algorithm.name}
+hydra_base_dir: ''
