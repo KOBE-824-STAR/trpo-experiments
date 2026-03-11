@@ -18,7 +18,7 @@ def _print(training: bool, epoch: int, interaction_step: int, gradient_step: int
         title = "[bold green]Testing Info[/bold green]"
     table = Table(title=title)
     table.add_column("Metric", justify="left")
-    table.add_column("Value", justif="right")
+    table.add_column("Value", justify="right")
 
     metrics['epoch'] = epoch 
     metrics['interaction_step'] = interaction_step

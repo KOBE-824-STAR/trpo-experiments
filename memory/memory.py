@@ -96,14 +96,14 @@ class ReplayBuffer:
         """Sample a batch of transitions from the replay buffer.
         TODO: add more states preprocess to other environments 
         """
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_indices),))
+        env_indices = np.random.randint(0, high=self.num_envs, size=(len(batch_indices),))
         
         return dict(
             states=atari_state_preprocess_function(self.observation_space, self.states[batch_indices, env_indices, :]),
             actions=self.actions[batch_indices, env_indices, :],
             next_states=atari_state_preprocess_function(self.observation_space, self.states[(batch_indices + 1) % self.buffer_size, env_indices, :]), # get the next state by adding 1 to the index, and taking modulo buffer size to handle the circular buffer.
-            rewards=self.rewards[batch_indices, env_indices, :],
-            dones=self.dones[batch_indices, env_indices, :],
+            rewards=self.rewards[batch_indices, env_indices],
+            dones=self.dones[batch_indices, env_indices],
         )
 
     def _get_indices(self, batch_size: int) -> np.ndarray:

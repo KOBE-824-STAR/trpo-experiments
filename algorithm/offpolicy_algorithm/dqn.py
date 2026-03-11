@@ -39,7 +39,7 @@ class DQN(OffPolicyAlgorithm):
         self.device = device
         
         if self.use_target:
-            self.target_agent = target_agent
+            self.target_agent = target_agent.to(self.device)
             self._target_hard_update()
 
         self.target_update_method = algo_args.target_update_method

@@ -21,7 +21,7 @@ class Result:
         if name in self.metrics:
             raise ValueError(f"Metric {name} already exists in the result, you are overwriting it.")
         
-        if isinstance(value, np.ndarray):
+        if isinstance(value, np.ndarray) or isinstance(value, np.floating):
             if len(value.shape)>1:
                 warnings.warn(f"Metric {name} is a numpy array with shape {value.shape}, we take the mean of it as the metric value.")
                 value = np.mean(value) # if the value is a numpy array, we take the mean of it as the metric value
@@ -33,7 +33,8 @@ class Result:
                 value = value.mean() # if the value is a torch tensor, we take the mean of it as the metric value
             
             value = value.item() # convert torch scalar to python scalar
-        
+        elif isinstance(value, float):
+            pass 
         else:
             raise ValueError(f"Metric value must be anint/float, numpy array or a torch tensor, but got {type(value)}")
         self.metrics[name] = value

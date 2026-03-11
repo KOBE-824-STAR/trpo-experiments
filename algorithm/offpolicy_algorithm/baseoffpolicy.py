@@ -10,7 +10,7 @@ from memory.memory import ReplayBuffer
 from utils.evaluate import evaluate_atari
 from agent.atrai_agent import AgentBase, AtariDQNAgent
 from utils.result import Result
-
+from utils.utils import atari_to_useful_action
 
 
 
@@ -73,13 +73,7 @@ class OffPolicyAlgorithm(ABC):
         """You can use this function to implement epsilon-greedy exploration strategy"""
         return False
 
-    def _to_useful_action(self, actions: np.ndarray):
-        if len(actions.shape)==1:
-            return actions 
-        elif len(actions.shape)==2:
-            return actions.squeeze(1)
-        else:
-            raise ValueError("actions' shape is more than 3 dims")
+    
 
     def interact_with_envs(self):
         """
@@ -94,7 +88,7 @@ class OffPolicyAlgorithm(ABC):
                 else:
                     actions = self.agent.select_action(self.observations, self.train_action_deterministic)
                 
-                next_observations, rewards, terminateds, infos = self.training_envs.step(self._to_useful_action(actions))
+                next_observations, rewards, terminateds, infos = self.training_envs.step(atari_to_useful_action(actions))
                 self.envs_rewards+=rewards
 
                 batch['states'].append(self.observations)
@@ -151,7 +145,10 @@ class OffPolicyAlgorithm(ABC):
         
         self.initialize() # reset envs
         for epoch in tqdm(range(self.total_epoch), desc="Epoch", unit="epoch"):
-
+            if self.test_condition():
+                test_result = evaluate_atari(self.agent, self.testing_envs, self.test_episodes)
+                self.logger.log_test(epoch, self.interaction_step, self.gradient_step, test_result)
+            
             collected_batch, interact_result = self.interact_with_envs()
             if self.start_train():
                 train_result = self.update(collected_batch)
@@ -159,9 +156,6 @@ class OffPolicyAlgorithm(ABC):
                 train_result.add(interact_result)
                 self.logger.log_train(epoch, self.interaction_step, self.gradient_step, train_result)
                 
-            if self.test_condition():
-                test_result = evaluate_atari(self.agent, self.testing_envs, self.test_episodes)
-                self.logger.log_test(epoch, self.interaction_step, self.gradient_step, test_result)
             
             if self.save_condition():
                 self.agent.save(self.save_pth)

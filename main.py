@@ -32,7 +32,7 @@ def get_args(cfg: DictConfig):
 def main(cfg: DictConfig):
     args = get_args(cfg)
     
-    training_envs, testing_envs = make_vec_envs(args.env,True,scale=False), make_vec_envs(args.env,False)
+    training_envs, testing_envs = make_vec_envs(args.env,True,scale=False), make_vec_envs(args.env,False,scale=False)
     
     logging.info("Checking for available GPUs...")
     device = get_best_device()

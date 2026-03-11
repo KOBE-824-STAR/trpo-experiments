@@ -38,11 +38,19 @@ def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:n
 
     :param gym.Env env: the environment to wrap.
     """
-    if isinstance(observation_space,gym.spaces.Box) and len(observation_space.shape)==3 and observation_space.low==0 and observation_space.high==255:
-        return states.float() / 255.0
+    if isinstance(observation_space,gym.spaces.Box) and len(observation_space.shape)==3: #  and observation_space.low==0 and observation_space.high==255: this condition is for atari environment (4,84,84) unit8
+        return states.astype(np.float32) / 255.0
     else:
         return states
 
+
+def atari_to_useful_action(actions: np.ndarray):
+        if len(actions.shape)==1:
+            return actions 
+        elif len(actions.shape)==2:
+            return actions.squeeze(1)
+        else:
+            raise ValueError("actions' shape is more than 3 dims")
 
 if __name__ == "__main__":
     print(get_best_device())

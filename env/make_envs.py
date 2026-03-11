@@ -225,45 +225,60 @@ if __name__ == "__main__":
     def make_easy_test():
         # TODO: add more envs except for atari envs 
         env = gym.make('ALE/Breakout-v5')
-        env = atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False)
+        env = atari_wrap(env, episode_life=False, clip_rewards=False, frame_stack=4, scale=False)
         return env
+    
     env = gym.make('ALE/Breakout-v5')
-    env = atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False)
-    print(env.observation_space)
-    exit()
-    obs, infos = env.reset()
-    print(obs)
-    exit()
-    env_num = 2
+    env = atari_wrap(env, episode_life=False, clip_rewards=False, frame_stack=4, scale=False)
+    action = 2
+    obs = env.reset()
+    env.step(1)
+    env.step(1)
+    while True:
+        obs, reward, terminated, truncated, info = env.step(action)
+        
+        if terminated:
+            print(info)
+            if info['lives']==0:
+                exit()
+
+
+
+    env_num = 1
     envs_func = [
         make_easy_test
         for i in range(env_num)
     ]
 
-    envs = SubprocVecEnv(envs_func)
-    print(envs.observation_space)
-    exit()
-    
-    
+    # envs = SubprocVecEnv(envs_func)
+    envs = DummyVecEnv(envs_func)
+
     obs = envs.reset()
     i = 0
     rewards = np.zeros(envs.num_envs)
+    saved = []
+    actions = [1 for _ in range(envs.num_envs)]
+        
+    obs, reward, terminated, info = envs.step(actions)
     while True:
-        actions = [envs.action_space.sample() for _ in range(envs.num_envs)]
+        actions = [2 for _ in range(envs.num_envs)]
         
         obs, reward, terminated, info = envs.step(actions)
-        print(reward)
-        exit()
+        lives = [info[i]['lives'] for i in range(len(info))]
+        
         rewards += rewards
-        for j in range(2):
-            if 'episode' in info[j].keys():
-                print(info[j])
-                exit()
-                if info[j]['lives']==0:
-                    print(info[j],rewards[j])
-                    input()
-                    i+=1
-                    if i==6:
-                        exit()
-       
+        
+        # saved.append(obs[0][0])
+        # if len(saved)>=1000:
+        #     break
+        for j in range(envs.num_envs):
+            
+            if info[j]['lives']==0:
+                print(info[j],terminated)
+                input()
+                i+=1
+                if i==6:
+                    exit()
+    # saved = np.array(saved)
+    # np.save("states",saved)
     
