@@ -13,7 +13,6 @@ from utils.result import Result
 from utils.utils import atari_to_useful_action
 
 
-
 class OffPolicyAlgorithm(ABC):
 
     """Base class for off-policy RL algorithms."""
@@ -146,7 +145,7 @@ class OffPolicyAlgorithm(ABC):
         self.initialize() # reset envs
         for epoch in tqdm(range(self.total_epoch), desc="Epoch", unit="epoch"):
             if self.test_condition():
-                test_result = evaluate_atari(self.agent, self.testing_envs, self.test_episodes)
+                test_result = evaluate_atari(self.agent, self.test_episodes,self.args.env)
                 self.logger.log_test(epoch, self.interaction_step, self.gradient_step, test_result)
             
             collected_batch, interact_result = self.interact_with_envs()

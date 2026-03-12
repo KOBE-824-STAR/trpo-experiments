@@ -4,7 +4,7 @@ import ale_py
 # register the atari envs to gymnasium
 gym.register_envs(ale_py)
 
-from stable_baselines3.common.atari_wrappers import ClipRewardEnv, EpisodicLifeEnv, MaxAndSkipEnv, NoopResetEnv, WarpFrame
+from stable_baselines3.common.atari_wrappers import ClipRewardEnv, EpisodicLifeEnv, MaxAndSkipEnv,FireResetEnv, NoopResetEnv, WarpFrame
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvWrapper\
 
 from stable_baselines3.common.vec_env.vec_normalize import \
@@ -143,25 +143,6 @@ class FrameStack(gym.Wrapper):
         # TODO: consider other condition
         return np.concatenate(self.frames, axis=0)
 
-class FireResetEnv(gym.Wrapper):
-    """Take action on reset for environments that are fixed until firing.
-
-    Related discussion: https://github.com/openai/baselines/issues/240.
-
-    :param gym.Env env: the environment to wrap.
-    """
-
-    def __init__(self, env: gym.Env) -> None:
-        super().__init__(env)
-        assert hasattr(env.unwrapped, "get_action_meanings")
-        assert env.unwrapped.get_action_meanings()[1] == "FIRE"
-        assert len(env.unwrapped.get_action_meanings()) >= 3
-
-    def reset(self, **kwargs: Any) -> tuple[Any, dict]:
-        _, _, return_info = _parse_reset_result(self.env.reset(**kwargs))
-        obs = self.env.step(1)[0]
-        return obs, {}
-
 
 class TransposeImage(gym.ObservationWrapper):
     def __init__(self, env=None, op=[2, 0, 1]):
@@ -287,13 +268,17 @@ if __name__ == "__main__":
         
         rewards += rewards
         
-        saved.append(obs[0][0])
-        if len(saved)>=1000:
-            break
+        
         for j in range(envs.num_envs):
             if terminated[j]:
                 print(terminated,[kk['lives'] for kk in info])
                 input("continue")
+                for kk in range(envs.num_envs):
+                    envs.en[kk].unwrapped.reset()
+                actions = [2 for _ in range(envs.num_envs)]
+                obs, reward, terminated, info = envs.step(actions)
+                print(terminated,info)
+                exit()
             # if info[j]['lives']==0:
                 
             #     input("over now")

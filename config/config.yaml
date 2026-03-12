@@ -1,5 +1,5 @@
 env: 
-  name: Breakout-v5
+  name: Pong-v5
   num_training_envs: 1
   num_testing_envs: 4
 
@@ -23,11 +23,11 @@ algorithm:
 seed: 0
 use_wandb: false
 use_tensorboard: true
-save_interval: 50000
-test_interval: 10000
-train_log_interval: 2000
+save_interval: 500000
+test_interval: 100000
+train_log_interval: 10000
 reward_buffer_size: 20
-total_epoch: 250000
+total_epoch: 5000000 
 interact_per_epoch: 4
 test_episodes: 10
 train_action_deterministic: true

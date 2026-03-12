@@ -33,7 +33,7 @@ def main(cfg: DictConfig):
     args = get_args(cfg)
     set_seed(args.seed)
     
-    training_envs, testing_envs = make_vec_envs(args.env,True,scale=False), make_vec_envs(args.env,False,scale=False)
+    training_envs = make_vec_envs(args.env,True,scale=False) # , make_vec_envs(args.env,False,scale=False)
     
     logging.info("Checking for available GPUs...")
     device = get_best_device()
@@ -55,7 +55,7 @@ def main(cfg: DictConfig):
     # create trainer 
     algorithm: OffPolicyAlgorithm | DQN
     
-    algorithm = ALGORITHM_DICT[args.algorithm.name](training_envs=training_envs, testing_envs=testing_envs, 
+    algorithm = ALGORITHM_DICT[args.algorithm.name](training_envs=training_envs, testing_envs=None, 
                                                buffer=buffer, agent=agent, 
                                                logger=logger, device=device, 
                                                save_pth=os.path.join(args.log_dir, "newest_model.pth"), 

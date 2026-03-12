@@ -1,13 +1,13 @@
 from utils.result import Result
 import torch
 import numpy as np 
-import gymnasium as gym 
-
+from omegaconf import DictConfig
 
 from agent.atrai_agent import AgentBase
 from .utils import atari_to_useful_action
+from env.make_envs import make_vec_envs
 
-def evaluate_atari(agent:AgentBase, envs: gym.Env, test_episodes:int):
+def evaluate_atari(agent:AgentBase, test_episodes:int, env_args:DictConfig):
     """
     Evaluate the policy in the given environments.
     
@@ -16,6 +16,7 @@ def evaluate_atari(agent:AgentBase, envs: gym.Env, test_episodes:int):
         envs: Vec environments to evaluate on.
         test_episodes: Number of episodes to run for each environment.
     """
+    envs = make_vec_envs(env_args,False,scale=False)
     agent.eval()
     states = envs.reset()
     episode_rewards = []
