@@ -20,7 +20,7 @@ algorithm:
   batch_size: 32
 
 
-
+seed: 0
 use_wandb: false
 use_tensorboard: true
 save_interval: 50000

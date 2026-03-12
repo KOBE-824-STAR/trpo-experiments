@@ -4,7 +4,7 @@ import ale_py
 # register the atari envs to gymnasium
 gym.register_envs(ale_py)
 
-from stable_baselines3.common.atari_wrappers import ClipRewardEnv, EpisodicLifeEnv, FireResetEnv, MaxAndSkipEnv, NoopResetEnv, WarpFrame
+from stable_baselines3.common.atari_wrappers import ClipRewardEnv, EpisodicLifeEnv, MaxAndSkipEnv, NoopResetEnv, WarpFrame
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvWrapper\
 
 from stable_baselines3.common.vec_env.vec_normalize import \
@@ -143,6 +143,26 @@ class FrameStack(gym.Wrapper):
         # TODO: consider other condition
         return np.concatenate(self.frames, axis=0)
 
+class FireResetEnv(gym.Wrapper):
+    """Take action on reset for environments that are fixed until firing.
+
+    Related discussion: https://github.com/openai/baselines/issues/240.
+
+    :param gym.Env env: the environment to wrap.
+    """
+
+    def __init__(self, env: gym.Env) -> None:
+        super().__init__(env)
+        assert hasattr(env.unwrapped, "get_action_meanings")
+        assert env.unwrapped.get_action_meanings()[1] == "FIRE"
+        assert len(env.unwrapped.get_action_meanings()) >= 3
+
+    def reset(self, **kwargs: Any) -> tuple[Any, dict]:
+        _, _, return_info = _parse_reset_result(self.env.reset(**kwargs))
+        obs = self.env.step(1)[0]
+        return obs, {}
+
+
 class TransposeImage(gym.ObservationWrapper):
     def __init__(self, env=None, op=[2, 0, 1]):
         """
@@ -170,7 +190,7 @@ def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=F
     """
     env = NoopResetEnv(env, noop_max=30) # add random no-op action at the beginning of each episode to introduce randomness
     env = MaxAndSkipEnv(env, skip=4) # skip 4 frames and take the max of the last 2 frames to reduce computational cost and deal with flickering
-    env = TimeLimit(env, max_episode_steps=10000) # set a time limit to prevent infinite episodes, since some games can last forever
+    env = TimeLimit(env, max_episode_steps=5000) # set a time limit to prevent infinite episodes, since some games can last forever
     if episode_life:
         env = EpisodicLifeEnv(env) # make end of life == end of episode, but only reset on true game over, so that the agent learns to avoid losing lives
     if 'FIRE' in env.unwrapped.get_action_meanings():
@@ -188,6 +208,7 @@ def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=F
     if frame_stack:
         env = FrameStack(env, frame_stack)
 
+
     return env
 
 
@@ -198,7 +219,7 @@ def make_vec_envs(args: DictConfig,is_training: bool,scale=False):
 
         if env_name:
             env = gym.make(env_name)
-            env = atari_wrap(env, episode_life=is_training, clip_rewards=is_training, frame_stack=4, scale=scale)
+            env = atari_wrap(env, episode_life=True, clip_rewards=is_training, frame_stack=4, scale=scale)
         else:
             raise NotImplementedError(f"Environment {env_name} is not supported yet.")
         return env
@@ -225,41 +246,39 @@ if __name__ == "__main__":
     def make_easy_test():
         # TODO: add more envs except for atari envs 
         env = gym.make('ALE/Breakout-v5')
-        env = atari_wrap(env, episode_life=False, clip_rewards=False, frame_stack=4, scale=False)
+        env = atari_wrap(env, episode_life=True, clip_rewards=False, frame_stack=4, scale=False)
         return env
     
-    env = gym.make('ALE/Breakout-v5')
-    env = atari_wrap(env, episode_life=False, clip_rewards=False, frame_stack=4, scale=False)
-    action = 2
-    obs = env.reset()
-    env.step(1)
-    env.step(1)
-    while True:
-        obs, reward, terminated, truncated, info = env.step(action)
+    # env = gym.make('ALE/Breakout-v5')
+    # env = atari_wrap(env, episode_life=True, clip_rewards=False, frame_stack=4, scale=False)
+    # action = 2
+    # obs = env.reset()
+    
+    # while True:
+    #     obs, reward, terminated, truncated, info = env.step(action)
         
-        if terminated:
-            print(info)
-            if info['lives']==0:
-                exit()
+    #     if terminated:
+    #         env.reset()
+            
+    #         if info['lives']==0:
+    #             print(info)
+    #             exit()
 
 
 
-    env_num = 1
+    env_num = 2
     envs_func = [
         make_easy_test
         for i in range(env_num)
     ]
 
-    # envs = SubprocVecEnv(envs_func)
-    envs = DummyVecEnv(envs_func)
+    envs = SubprocVecEnv(envs_func)
+    # envs = DummyVecEnv(envs_func)
 
     obs = envs.reset()
     i = 0
     rewards = np.zeros(envs.num_envs)
     saved = []
-    actions = [1 for _ in range(envs.num_envs)]
-        
-    obs, reward, terminated, info = envs.step(actions)
     while True:
         actions = [2 for _ in range(envs.num_envs)]
         
@@ -268,17 +287,19 @@ if __name__ == "__main__":
         
         rewards += rewards
         
-        # saved.append(obs[0][0])
-        # if len(saved)>=1000:
-        #     break
+        saved.append(obs[0][0])
+        if len(saved)>=1000:
+            break
         for j in range(envs.num_envs):
-            
-            if info[j]['lives']==0:
-                print(info[j],terminated)
-                input()
-                i+=1
-                if i==6:
-                    exit()
+            if terminated[j]:
+                print(terminated,[kk['lives'] for kk in info])
+                input("continue")
+            # if info[j]['lives']==0:
+                
+            #     input("over now")
+            #     saved = np.array(saved)
+            #     np.save("states",saved) 
+            #     exit()
     # saved = np.array(saved)
     # np.save("states",saved)
     

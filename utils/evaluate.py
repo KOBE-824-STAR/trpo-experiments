@@ -28,7 +28,7 @@ def evaluate_atari(agent:AgentBase, envs: gym.Env, test_episodes:int):
             next_states, rewards, terminateds, infos = envs.step(atari_to_useful_action(actions))
             envs_rewards += rewards
             for i in range(envs.num_envs):
-                if infos[i]['lives']==0 or terminateds[i]: # this is because the testing_envs is not wrapped with EpisodeLife, so we need to check the terminated flag to get the episode rewards
+                if infos[i]['lives']==0: # TODO: In game like MontezumaRevenge, it is always lives=0 and we need extra process
                     episode_rewards.append(envs_rewards[i])
                     envs_rewards[i] = 0.0
             states = next_states

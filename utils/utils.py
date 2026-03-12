@@ -32,6 +32,9 @@ def get_best_device():
         print(f"Using GPU {best_gpu} with approx {max_free/1e6:.0f} MB free memory.")
     return device
 
+def set_seed(seed):
+    pass
+
 
 def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:np.ndarray):
     """Normalize observations to 0~1.

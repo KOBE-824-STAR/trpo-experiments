@@ -15,7 +15,7 @@ from env.make_envs import make_vec_envs
 from algorithm.offpolicy_algorithm.baseoffpolicy import OffPolicyAlgorithm
 from algorithm.offpolicy_algorithm import DQN
 from algorithm.offpolicy_algorithm import ALGORITHM_DICT
-from utils.utils import get_best_device
+from utils.utils import get_best_device, set_seed
 from logger.logger import Logger 
 from memory.memory import ReplayBuffer
 from memory import BUFFER_DICT
@@ -31,6 +31,7 @@ def get_args(cfg: DictConfig):
 @hydra.main(config_path="config", config_name="config",version_base="1.3")
 def main(cfg: DictConfig):
     args = get_args(cfg)
+    set_seed(args.seed)
     
     training_envs, testing_envs = make_vec_envs(args.env,True,scale=False), make_vec_envs(args.env,False,scale=False)
     
