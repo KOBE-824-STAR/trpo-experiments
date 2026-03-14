@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import gymnasium as gym
+import random
 
 def get_best_device():
 
@@ -33,7 +34,20 @@ def get_best_device():
     return device
 
 def set_seed(seed):
-    pass
+    random.seed(seed)
+
+    # Numpy
+    np.random.seed(seed)
+
+    # PyTorch
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Ensure deterministic behavior
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 
 def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:np.ndarray):
@@ -41,7 +55,7 @@ def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:n
 
     :param gym.Env env: the environment to wrap.
     """
-    if isinstance(observation_space,gym.spaces.Box) and len(observation_space.shape)==3: #  and observation_space.low==0 and observation_space.high==255: this condition is for atari environment (4,84,84) unit8
+    if isinstance(observation_space,gym.spaces.Box) and len(observation_space.shape)==3 and states.dtype==np.uint8: #  and observation_space.low==0 and observation_space.high==255: this condition is for atari environment (4,84,84) unit8
         return states.astype(np.float32) / 255.0
     else:
         return states

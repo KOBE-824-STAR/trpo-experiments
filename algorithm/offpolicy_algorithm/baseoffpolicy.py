@@ -8,7 +8,7 @@ import gymnasium as gym
 from logger.logger import Logger
 from memory.memory import ReplayBuffer
 from utils.evaluate import evaluate_atari
-from agent.atrai_agent import AgentBase, AtariDQNAgent
+from agent.atari_agent import AgentBase, AtariDQNAgent
 from utils.result import Result
 from utils.utils import atari_to_useful_action
 
@@ -88,7 +88,7 @@ class OffPolicyAlgorithm(ABC):
                     actions = self.agent.select_action(self.observations, self.train_action_deterministic)
                 
                 next_observations, rewards, terminateds, infos = self.training_envs.step(atari_to_useful_action(actions))
-                self.envs_rewards+=rewards
+                # self.envs_rewards+=rewards
 
                 batch['states'].append(self.observations)
                 batch['actions'].append(actions)
@@ -96,11 +96,10 @@ class OffPolicyAlgorithm(ABC):
                 batch['next_states'].append(next_observations)
                 batch['dones'].append(terminateds) 
                 for i in range(self.num_training_envs):
-                    terminate = terminateds[i]
                     info = infos[i]
-                    if info['lives']==0 and terminate:
-                        self.episode_reward_buffer.append(self.envs_rewards[i])
-                        self.envs_rewards[i] = 0
+                    if "episode" in info:
+                        self.episode_reward_buffer.append(info['episode']['r'])
+                        # self.envs_rewards[i] = 0
                 self.observations = next_observations
                 self.interaction_step += self.num_training_envs
         

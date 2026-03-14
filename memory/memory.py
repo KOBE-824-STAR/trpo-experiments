@@ -87,7 +87,8 @@ class ReplayBuffer:
             self.dones[:second_part] = d[first_part:]
 
             self.full = True
-
+        if end>=self.buffer_size:
+            self.full = True
         self.pos = end % self.buffer_size
         
         self.states[self.pos] = ns[-1] # set the next state of the last transition in the batch to the current position, so that we can get the next state when sampling.
@@ -99,9 +100,9 @@ class ReplayBuffer:
         env_indices = np.random.randint(0, high=self.num_envs, size=(len(batch_indices),))
         
         return dict(
-            states=atari_state_preprocess_function(self.observation_space, self.states[batch_indices, env_indices, :]),
+            states=self.states[batch_indices, env_indices, :],
             actions=self.actions[batch_indices, env_indices, :],
-            next_states=atari_state_preprocess_function(self.observation_space, self.states[(batch_indices + 1) % self.buffer_size, env_indices, :]), # get the next state by adding 1 to the index, and taking modulo buffer size to handle the circular buffer.
+            next_states=self.states[(batch_indices + 1) % self.buffer_size, env_indices, :], # get the next state by adding 1 to the index, and taking modulo buffer size to handle the circular buffer.
             rewards=self.rewards[batch_indices, env_indices],
             dones=self.dones[batch_indices, env_indices],
         )

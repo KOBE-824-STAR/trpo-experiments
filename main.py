@@ -19,7 +19,7 @@ from utils.utils import get_best_device, set_seed
 from logger.logger import Logger 
 from memory.memory import ReplayBuffer
 from memory import BUFFER_DICT
-from agent.atrai_agent import AtariDQNAgent
+from agent.atari_agent import AtariDQNAgent
 
 
 def get_args(cfg: DictConfig):

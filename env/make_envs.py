@@ -4,36 +4,36 @@ import ale_py
 # register the atari envs to gymnasium
 gym.register_envs(ale_py)
 
+
 from stable_baselines3.common.atari_wrappers import ClipRewardEnv, EpisodicLifeEnv, MaxAndSkipEnv,FireResetEnv, NoopResetEnv, WarpFrame
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnvWrapper\
 
 from stable_baselines3.common.vec_env.vec_normalize import \
     VecNormalize as VecNormalize_ # TODO use this to vector envs like Mujoco and Cartpole
 
-from stable_baselines3.common.monitor import Monitor
+# from stable_baselines3.common.monitor import Monitor
 
 import numpy as np
 from collections import deque
 from typing import Any, SupportsFloat
 from omegaconf import DictConfig
+import os 
 ATARI_ENVS = [
-    'ALE/Breakout-v5',
-    'ALE/Pong-v5',
-    'ALE/SpaceInvaders-v5',
-    'ALE/Seaquest-v5',
-    'ALE/Enduro-v5',
-    'ALE/BeamRider-v5',
-    'ALE/Qbert-v5',
-    'ALE/Assault-v5',
-    'ALE/Asteroids-v5',
-    'ALE/Atlantis-v5',
+    'BreakoutNoFrameskip-v4',
+    'PongNoFrameskip-v4',
+    'SpaceInvadersNoFrameskip-v4',
+    'SeaquestNoFrameskip-v4',
+    'EnduroNoFrameskip-v4',
+    'BeamRiderNoFrameskip-v4',
+    'QbertNoFrameskip-v4',
+    'AssaultNoFrameskip-v4',
+    'AsteroidsNoFrameskip-v4',
+    'AtlantisNoFrameskip-v4',
 ]
 
 
 def is_atari_env(env_name:str) -> bool:
-    if "ALE/" + env_name in ATARI_ENVS:
-        return "ALE/" + env_name
-    elif env_name in ATARI_ENVS:
+    if env_name in ATARI_ENVS:
         return env_name
     else:
         return False
@@ -50,7 +50,7 @@ def _parse_reset_result(reset_result: tuple) -> tuple[tuple, dict, bool]:
     return reset_result, {}, contains_info
 
 def get_space_dtype(obs_space: gym.spaces.Box) -> type[np.floating] | type[np.integer]:
-    """TODO."""
+    
     obs_space_dtype: type[np.integer] | type[np.floating]
     if np.issubdtype(obs_space.dtype, np.integer):
         obs_space_dtype = np.integer
@@ -165,13 +165,38 @@ class TransposeImage(gym.ObservationWrapper):
         return ob.transpose(self.op[0], self.op[1], self.op[2])
 
 
+class Monitor(gym.Wrapper[np.ndarray, int, np.ndarray, int]):
+    def __init__(
+        self,
+        env: gym.Env
+    ):
+        super().__init__(env=env)
+        self.rewards: list[float] = []
+        
 
-def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False):
+    def reset(self, **kwargs) -> tuple[np.ndarray, dict]:
+        self.rewards = []
+
+        return self.env.reset(**kwargs)
+
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        self.rewards.append(float(reward))
+        if terminated or truncated:
+            ep_rew = sum(self.rewards)
+            ep_info = {"r": round(ep_rew, 6)}
+            info["episode"] = ep_info
+        return observation, reward, terminated, truncated, info
+
+
+def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False,allow_early_resets=True):
     """Configure environment for DeepMind-style Atari.
     """
     env = NoopResetEnv(env, noop_max=30) # add random no-op action at the beginning of each episode to introduce randomness
     env = MaxAndSkipEnv(env, skip=4) # skip 4 frames and take the max of the last 2 frames to reduce computational cost and deal with flickering
     env = TimeLimit(env, max_episode_steps=5000) # set a time limit to prevent infinite episodes, since some games can last forever
+    env = Monitor(env)
+    
     if episode_life:
         env = EpisodicLifeEnv(env) # make end of life == end of episode, but only reset on true game over, so that the agent learns to avoid losing lives
     if 'FIRE' in env.unwrapped.get_action_meanings():
@@ -199,8 +224,10 @@ def make_vec_envs(args: DictConfig,is_training: bool,scale=False):
         env_name = is_atari_env(args.name)
 
         if env_name:
-            env = gym.make(env_name)
-            env = atari_wrap(env, episode_life=True, clip_rewards=is_training, frame_stack=4, scale=scale)
+            env = gym.make(env_name, frameskip=1)
+            
+            is_testing = not is_training
+            env = atari_wrap(env, episode_life=True, clip_rewards=is_training, frame_stack=4, scale=scale, allow_early_resets=is_testing)
         else:
             raise NotImplementedError(f"Environment {env_name} is not supported yet.")
         return env
@@ -230,23 +257,21 @@ if __name__ == "__main__":
         env = atari_wrap(env, episode_life=True, clip_rewards=False, frame_stack=4, scale=False)
         return env
     
-    # env = gym.make('ALE/Breakout-v5')
-    # env = atari_wrap(env, episode_life=True, clip_rewards=False, frame_stack=4, scale=False)
-    # action = 2
-    # obs = env.reset()
+    env = gym.make('BreakoutNoFrameskip-v4')
+    env = atari_wrap(env, episode_life=True, clip_rewards=False, frame_stack=4, scale=False)
+    action = 3
+    obs = env.reset()
     
-    # while True:
-    #     obs, reward, terminated, truncated, info = env.step(action)
-        
-    #     if terminated:
-    #         env.reset()
-            
-    #         if info['lives']==0:
-    #             print(info)
-    #             exit()
+    while True:
+        obs, reward, terminated, truncated, info = env.step(action)
+        if terminated:
+            print(last_info, info)
+            input('terminate')
+            env.reset()
+        last_info = info
 
 
-
+    exit()
     env_num = 2
     envs_func = [
         make_easy_test

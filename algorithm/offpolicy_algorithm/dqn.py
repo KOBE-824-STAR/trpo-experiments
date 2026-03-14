@@ -4,7 +4,7 @@ import torch
 from utils.result import Result
 from logger.logger import Logger
 import numpy as np
-from agent.atrai_agent import AgentBase, AtariDQNAgent
+from agent.atari_agent import AgentBase, AtariDQNAgent
 
 
 OPTIMIZER_DICT = {
@@ -116,5 +116,4 @@ class DQN(OffPolicyAlgorithm):
             epsilon = max(self.end_epsilon, self.start_epsilon - self.interaction_step / (self.total_epoch * self.interact_per_epoch) * (self.start_epsilon - self.end_epsilon))
         else:
             epsilon = self.start_epsilon
-        
         return np.random.rand() < epsilon
