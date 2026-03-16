@@ -9,9 +9,9 @@ from utils.networks import AtariDQNNetwork
 from utils.utils import atari_state_preprocess_function
 
 
-def to_correct_device_tensor(input, device)-> torch.Tensor:
+def to_correct_device_tensor(input, device, dtype=torch.float32)-> torch.Tensor:
     if isinstance(input, np.ndarray):
-        return torch.tensor(input,dtype=torch.float32,device=device)
+        return torch.tensor(input,dtype=dtype,device=device)
     elif isinstance(input, torch.Tensor):
         input = input.to(device)
         return input
@@ -86,7 +86,7 @@ class AtariDQNAgent(AgentBase):
 
     def get_q(self, states:np.ndarray, actions:Union[np.ndarray, torch.Tensor]):
         states = atari_state_preprocess_function(self.observation_space, states)
-        states, actions = to_correct_device_tensor(states, self.device) ,to_correct_device_tensor(actions, self.device)
+        states, actions = to_correct_device_tensor(states, self.device) ,to_correct_device_tensor(actions, self.device, torch.long)
         all_q_values = self.network(states)
         q_values = all_q_values.gather(1, actions)
         return q_values 

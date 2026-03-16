@@ -49,10 +49,14 @@ class OffPolicyAlgorithm(ABC):
 
     
     
-    def update(self, batch)-> Result:
-        self._update_buffer(batch)
-        update_policy_log = self._update_policy()
-        return update_policy_log
+    def update(self, batch, start_train)-> Result:
+        with Result("buffer") as result:
+            self._update_buffer(batch)
+        if start_train:
+            update_policy_log = self._update_policy()
+            result.add(update_policy_log)
+            return result
+        return result
         
     
     @abstractmethod
@@ -82,6 +86,7 @@ class OffPolicyAlgorithm(ABC):
         batch = dict(states=[], actions=[], rewards=[], next_states=[], dones=[]) 
         with Result("interact") as result:
             for step in range(interact_steps_per_env):
+                
                 if self.random_choose_action():
                     actions = np.array([[self.training_envs.action_space.sample()] for _ in range(self.num_training_envs)],dtype=self.training_envs.action_space.dtype)
                 else:
@@ -104,8 +109,8 @@ class OffPolicyAlgorithm(ABC):
                 self.interaction_step += self.num_training_envs
         
         for k,v in batch.items():
-            if k=="infos":
-                continue
+            # if k=="infos":
+            #     continue
             batch[k] = np.stack(v,axis=0)
 
         if len(self.episode_reward_buffer)>0:
@@ -134,7 +139,7 @@ class OffPolicyAlgorithm(ABC):
         return False
 
     def start_train(self):
-        return self.interaction_step>=1000
+        return self.interaction_step>=5000
 
     def run(self):
         """
@@ -148,8 +153,7 @@ class OffPolicyAlgorithm(ABC):
                 self.logger.log_test(epoch, self.interaction_step, self.gradient_step, test_result)
             
             collected_batch, interact_result = self.interact_with_envs()
-            if self.start_train():
-                train_result = self.update(collected_batch)
+            train_result = self.update(collected_batch, self.start_train())
             if self.train_log_condition():
                 train_result.add(interact_result)
                 self.logger.log_train(epoch, self.interaction_step, self.gradient_step, train_result)

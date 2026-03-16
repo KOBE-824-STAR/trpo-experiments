@@ -32,7 +32,9 @@ class DQN(OffPolicyAlgorithm):
         self.lr = algo_args.learning_rate
         self.gamma = algo_args.gamma 
         self.start_epsilon = algo_args.start_epsilon
+        self.epsilon = algo_args.start_epsilon
         self.end_epsilon = algo_args.end_epsilon
+        self.epsilon_timestep = algo_args.epsilon_timestep
         self.epsilon_schedular = algo_args.epsilon_schedular
         self.use_target = algo_args.use_target 
         self.batch_size = algo_args.batch_size
@@ -72,17 +74,18 @@ class DQN(OffPolicyAlgorithm):
             batch = self.buffer.sample(self.batch_size)
             states, actions, next_states, rewards, dones = batch['states'], batch['actions'], batch['next_states'], batch['rewards'], batch['dones']
 
-            states = torch.from_numpy(states).float().to(self.device)
-            actions = torch.from_numpy(actions).long().to(self.device)
-            next_states = torch.from_numpy(next_states).float().to(self.device)
-            rewards = torch.from_numpy(rewards).float().to(self.device)
-            dones = torch.from_numpy(dones).float().to(self.device)
+            # states = torch.from_numpy(states).float().to(self.device)
+            # actions = torch.from_numpy(actions).long().to(self.device)
+            # next_states = torch.from_numpy(next_states).float().to(self.device)
+            rewards = torch.from_numpy(rewards).float().to(self.device).unsqueeze(1)
+            dones = torch.from_numpy(dones).float().to(self.device).unsqueeze(1)
 
             # calculate the DQN loss    
-            if self.use_target:
-                target = rewards + (1 - dones) * self.gamma * self.target_agent.get_max_q(next_states)
-            else:
-                target = rewards + (1 - dones) * self.gamma * self.agent.get_max_q(next_states)
+            with torch.no_grad():
+                if self.use_target:
+                    target = rewards + (1 - dones) * self.gamma * self.target_agent.get_max_q(next_states)
+                else:
+                    target = rewards + (1 - dones) * self.gamma * self.agent.get_max_q(next_states)
             q = self.agent.get_q(states, actions)
             
             td_error = target - q
@@ -113,7 +116,12 @@ class DQN(OffPolicyAlgorithm):
     def random_choose_action(self):
         """You can use this function to implement epsilon-greedy exploration strategy"""
         if self.epsilon_schedular=="linear":
-            epsilon = max(self.end_epsilon, self.start_epsilon - self.interaction_step / (self.total_epoch * self.interact_per_epoch) * (self.start_epsilon - self.end_epsilon))
+            self.epsilon = max(self.end_epsilon, self.start_epsilon - self.interaction_step / self.epsilon_timestep * (self.start_epsilon - self.end_epsilon))
         else:
-            epsilon = self.start_epsilon
-        return np.random.rand() < epsilon
+            self.epsilon = self.start_epsilon
+        return np.random.rand() < self.epsilon
+
+    def interact_with_envs(self):
+        batch, result = super().interact_with_envs()
+        result.add_metric("epsilon",self.epsilon)
+        return batch, result

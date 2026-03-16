@@ -189,7 +189,7 @@ class Monitor(gym.Wrapper[np.ndarray, int, np.ndarray, int]):
         return observation, reward, terminated, truncated, info
 
 
-def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False,allow_early_resets=True):
+def atari_wrap(env, episode_life=True, clip_rewards=True, frame_stack=4, scale=False):
     """Configure environment for DeepMind-style Atari.
     """
     env = NoopResetEnv(env, noop_max=30) # add random no-op action at the beginning of each episode to introduce randomness
@@ -226,8 +226,7 @@ def make_vec_envs(args: DictConfig,is_training: bool,scale=False):
         if env_name:
             env = gym.make(env_name, frameskip=1)
             
-            is_testing = not is_training
-            env = atari_wrap(env, episode_life=True, clip_rewards=is_training, frame_stack=4, scale=scale, allow_early_resets=is_testing)
+            env = atari_wrap(env, episode_life=True, clip_rewards=is_training, frame_stack=args.frame_stack, scale=scale)
         else:
             raise NotImplementedError(f"Environment {env_name} is not supported yet.")
         return env

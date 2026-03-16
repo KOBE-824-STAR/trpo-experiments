@@ -1,7 +1,8 @@
 env: 
-  name: PongNoFrameskip-v4
+  name: BreakoutNoFrameskip-v4
   num_training_envs: 1
   num_testing_envs: 4
+  frame_stack: 4
 
 algorithm:
   name: DQN
@@ -13,9 +14,10 @@ algorithm:
   start_epsilon: 1
   end_epsilon: 0.1
   epsilon_schedular: linear
-  use_target: True
-  target_update_method: soft
-  target_update_interval: 1000
+  epsilon_timestep: 1000000
+  use_target: true
+  target_update_method: hard
+  target_update_interval: 10000
   target_update_tau: 0.005
   batch_size: 32
 

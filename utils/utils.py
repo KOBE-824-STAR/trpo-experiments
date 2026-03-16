@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import gymnasium as gym
 import random
+from typing import Union
 
 def get_best_device():
 
@@ -50,7 +51,7 @@ def set_seed(seed):
 
 
 
-def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:np.ndarray):
+def atari_state_preprocess_function(observation_space:gym.spaces.Space, states:Union[np.ndarray,torch.Tensor]):
     """Normalize observations to 0~1.
 
     :param gym.Env env: the environment to wrap.
