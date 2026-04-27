@@ -34,3 +34,33 @@ class AtariDQNNetwork(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)  
         return x
+
+
+# This network is used in TRPO
+class MLPNetwork(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_sizes=[30,], activation=nn.ReLU):
+        super(MLPNetwork, self).__init__()
+        layers = []
+        last_dim = input_dim
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(last_dim, hidden_size))
+            layers.append(activation())
+            last_dim = hidden_size
+        layers.append(nn.Linear(last_dim, output_dim))
+        self.net = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        # x: (batch, input_dim)
+        return self.net(x)
+    
+
+class Actor(nn.Module): # This is designed in TRPO, in other algorithm there are more to implement
+    def __init__(self, state_dim, action_dim, hidden_sizes=[30,], activation=nn.ReLU):
+        super(Actor, self).__init__()
+        self.mu = MLPNetwork(state_dim, action_dim, hidden_sizes, activation)
+        self.log_sigma =  nn.Parameter(torch.zeros(size=(1,action_dim))) 
+    
+    def forward(self,x):
+        mu = self.mu(x)
+        sigma = torch.exp(self.log_sigma).expand_as(mu)
+        return mu, sigma

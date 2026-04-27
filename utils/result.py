@@ -33,7 +33,7 @@ class Result:
                 value = value.mean() # if the value is a torch tensor, we take the mean of it as the metric value
             
             value = value.item() # convert torch scalar to python scalar
-        elif isinstance(value, float):
+        elif isinstance(value, float) or isinstance(value, int):
             pass 
         else:
             raise ValueError(f"Metric value must be anint/float, numpy array or a torch tensor, but got {type(value)}")

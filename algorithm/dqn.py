@@ -4,33 +4,22 @@ import torch
 from utils.result import Result
 from logger.logger import Logger
 import numpy as np
-from agent.atari_agent import AgentBase, AtariDQNAgent
+from agent.agent import AtariDQNAgent
+from utils.utils import OPTIMIZER_DICT
 
 
-OPTIMIZER_DICT = {
-    "Adam": torch.optim.Adam,
-    "SGD": torch.optim.SGD,
-    "RMSprop": torch.optim.RMSprop,
-    "AdamW": torch.optim.AdamW,
-}
-
-LOSS_DICT = {
-    "mse": torch.nn.MSELoss(),
-    "huber": torch.nn.SmoothL1Loss(),
-}
 
 
 class DQN(OffPolicyAlgorithm):
     
     """DQN algorithm implementation."""
 
-    def __init__(self, training_envs, testing_envs, buffer: ReplayBuffer, agent:AgentBase, logger: Logger, device, save_pth: str, args, target_agent=None):
-        super(DQN, self).__init__(training_envs, testing_envs, buffer, agent, logger, device, save_pth, args)
+    def __init__(self, training_envs, testing_envs, buffer: ReplayBuffer, agent: AtariDQNAgent, logger: Logger, device, save_pth: str,best_pth: str, args, target_agent=None):
+        super(DQN, self).__init__(training_envs, testing_envs, buffer, agent, logger, device, save_pth,best_pth, args)
         
         algo_args = args.algorithm
         assert algo_args.name=="DQN", "The method name in args must be 'dqn' for DQN algorithm."
         self.lr = algo_args.learning_rate
-        self.gamma = algo_args.gamma 
         self.start_epsilon = algo_args.start_epsilon
         self.epsilon = algo_args.start_epsilon
         self.end_epsilon = algo_args.end_epsilon
@@ -74,9 +63,6 @@ class DQN(OffPolicyAlgorithm):
             batch = self.buffer.sample(self.batch_size)
             states, actions, next_states, rewards, dones = batch['states'], batch['actions'], batch['next_states'], batch['rewards'], batch['dones']
 
-            # states = torch.from_numpy(states).float().to(self.device)
-            # actions = torch.from_numpy(actions).long().to(self.device)
-            # next_states = torch.from_numpy(next_states).float().to(self.device)
             rewards = torch.from_numpy(rewards).float().to(self.device).unsqueeze(1)
             dones = torch.from_numpy(dones).float().to(self.device).unsqueeze(1)
 

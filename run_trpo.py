@@ -12,14 +12,11 @@ import torch
 from datetime import datetime 
 
 from env.make_envs import make_vec_envs
-from algorithm.offpolicy_algorithm.baseoffpolicy import OffPolicyAlgorithm
-from algorithm.offpolicy_algorithm import DQN
-from algorithm.offpolicy_algorithm import ALGORITHM_DICT
+from algorithm import TRPO, OnPolicyAlgorithm, ALGORITHM_DICT
 from utils.utils import get_best_device, set_seed
 from logger.logger import Logger 
-from memory.memory import ReplayBuffer
-from memory import BUFFER_DICT
-from agent.atari_agent import AtariDQNAgent
+from memory import BUFFER_DICT,ReplayBuffer, TrajectoryRollout
+from agent.agent import GaussianAgent
 
 
 def get_args(cfg: DictConfig):
@@ -33,7 +30,7 @@ def main(cfg: DictConfig):
     args = get_args(cfg)
     set_seed(args.seed)
     
-    training_envs = make_vec_envs(args.env,True,scale=False) # , make_vec_envs(args.env,False,scale=False)
+    training_envs = make_vec_envs(args.env,True,scale=False,seed=args.seed) # , make_vec_envs(args.env,False,scale=False)
     
     logging.info("Checking for available GPUs...")
     device = get_best_device()
@@ -41,25 +38,28 @@ def main(cfg: DictConfig):
     logging.info("Creating the Logger...")
     runtime = datetime.now()
     runtime = runtime.strftime("%Y-%m-%d %H:%M:%S")
-    logger = Logger(project_name=args.experiment_name, run_name=runtime, log_dir=args.log_dir, use_wandb=args.use_wandb, use_tensorboard=args.use_tensorboard)
+    logger = Logger(project_name=args.experiment_name, run_name=runtime, config=args.algorithm, log_dir=args.log_dir, use_wandb=args.use_wandb, use_tensorboard=args.use_tensorboard, use_swanlab=args.use_swanlab)
 
     logging.info("Creating the ReplayBuffer...")
-    buffer = BUFFER_DICT[args.algorithm.buffer_name](training_envs.observation_space, training_envs.action_space, args.algorithm.buffer_size, training_envs.num_envs)
+    if args.algorithm.buffer_name=="TrajectoryRollout":
+        buffer = TrajectoryRollout(training_envs.observation_space,training_envs.action_space, args.algorithm.trajnum, args.env.max_episode_length, args.algorithm.gamma)
+    else:
+        buffer = ReplayBuffer(training_envs.observation_space, training_envs.action_space, args.interact_per_epoch, training_envs.num_envs,onpolicy=args.algorithm.onpolicy)
 
     logging.info("Creating the Agent...")
-    agent = AtariDQNAgent(training_envs.observation_space, training_envs.action_space, device)
-    target_agent = AtariDQNAgent(training_envs.observation_space, training_envs.action_space, device) if args.algorithm.use_target else None
+    agent = GaussianAgent(training_envs.observation_space, training_envs.action_space, device,rescale=args.algorithm.rescale ,hidden_sizes=args.algorithm.hidden_sizes, activation=torch.nn.Tanh)
     
         
 
     # create trainer 
-    algorithm: OffPolicyAlgorithm | DQN
+    algorithm: OnPolicyAlgorithm | TRPO
     
     algorithm = ALGORITHM_DICT[args.algorithm.name](training_envs=training_envs, testing_envs=None, 
                                                buffer=buffer, agent=agent, 
                                                logger=logger, device=device, 
                                                save_pth=os.path.join(args.log_dir, "newest_model.pth"), 
-                                               args=args,target_agent=target_agent)
+                                               best_pth=os.path.join(args.log_dir, "best_model.pth"),
+                                               args=args)
 
     logging.info("Begin Training...")
     algorithm.run()

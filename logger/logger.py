@@ -4,6 +4,7 @@ from typing import Any
 
 from utils.result import Result 
 import wandb 
+import swanlab
 from torch.utils.tensorboard import SummaryWriter
 from rich.console import Console 
 from rich.table import Table 
@@ -32,12 +33,15 @@ def _print(training: bool, epoch: int, interaction_step: int, gradient_step: int
 
 
 class Logger:
-    def __init__(self, project_name:str, run_name:str, log_dir="logs", use_wandb=True, use_tensorboard=True):
+    def __init__(self, project_name:str, run_name:str, config:dict, log_dir="logs", use_wandb=True, use_tensorboard=True, use_swanlab=True):
         self.use_wandb = use_wandb
         self.use_tensorboard = use_tensorboard
+        self.use_swanlab = use_swanlab
         self.log_dir = log_dir
         if self.use_wandb:
             wandb.init(project=project_name, name=run_name,dir=log_dir)
+        if self.use_swanlab:
+            swanlab.init(project=project_name, name=run_name,logdir=log_dir, config=config)
         
         if self.use_tensorboard:
             self.writer = SummaryWriter(log_dir=log_dir)
@@ -47,6 +51,8 @@ class Logger:
             wandb.log({key: value}, step=step)
         if self.use_tensorboard:
             self.writer.add_scalar(key, value, global_step=step)
+        if self.use_swanlab:
+            swanlab.log({key:value,"step":step})
 
     def log_train(self, epoch, interaction_step, gradient_step, train_result: Result): 
         for k,v in train_result.metrics.items():
