@@ -38,179 +38,218 @@ class TRPO(OnPolicyAlgorithm):
     
     def compute_advantages_from_traj(self)->Tuple[np.ndarray,np.ndarray]:
         states = self.traj_rollout.states
-        rewards = self.traj_rollout.rewards 
-        dones = self.traj_rollout.dones 
-        
+        rewards = self.traj_rollout.rewards
+        dones = self.traj_rollout.dones
+        masks = self.traj_rollout.masks
+
+        trajnum, max_episode_length = rewards.shape
+        flat_states = states.reshape(trajnum * max_episode_length, *self.observation_space.shape)
 
         with torch.no_grad():
-            values = self.agent.get_value(states.reshape((-1,states.shape[-1]))).squeeze(1).reshape((self.trajnum, self.max_episode_length)).cpu().numpy()
+            values = self.agent.get_value(flat_states)
+            values = values.reshape(trajnum, max_episode_length).cpu().numpy()
 
-        delta = np.zeros((self.trajnum,),dtype=np.float32)
-        last_advan = np.zeros((self.trajnum,),dtype=np.float32)
-        last_value = np.zeros((self.trajnum,),dtype=np.float32)
-        last_returns = np.zeros((self.trajnum,),dtype=np.float32)
-        advantages = np.zeros((self.trajnum,self.max_episode_length),dtype=np.float32)
-        returns = np.zeros((self.trajnum,self.max_episode_length),dtype=np.float32)
+        advantages = np.zeros_like(rewards, dtype=np.float32)
+        last_gae_lam = np.zeros(trajnum, dtype=np.float32)
 
-        for i in range(self.max_episode_length-1,-1,-1):
-            delta = rewards[:,i] + self.gamma*(1-dones[:,i])*last_value - values[:,i]
-            advantages[:,i] = delta + self.gamma*self.lambda_*(1-dones[:,i])*last_advan
-            returns[:,i] = rewards[:,i] + (1-dones[:,i])*self.gamma*last_returns
-            
-            
-            last_value = values[:,i]
-            last_advan = advantages[:,i]
-            last_returns = returns[:,i]
-        return returns, advantages
+        for step in reversed(range(max_episode_length)):
+            if step == max_episode_length - 1:
+                next_values = np.zeros(trajnum, dtype=np.float32)
+            else:
+                next_values = values[:, step + 1]
+
+            non_terminal = 1.0 - dones[:, step]
+            delta = rewards[:, step] + self.gamma * next_values * non_terminal - values[:, step]
+            last_gae_lam = delta + self.gamma * self.lambda_ * non_terminal * last_gae_lam
+            advantages[:, step] = last_gae_lam * masks[:, step]
+
+        returns = advantages + values
+        valid_steps = masks.astype(bool)
+        return advantages[valid_steps], returns[valid_steps]
+        
 
     def compute_advantages_from_rollout(self)->Tuple[np.ndarray,np.ndarray]:
+        # TODO: correctly compute the advantages and returns from the rollout buffer
         states = self.buffer.buffer['states']
         rewards = self.buffer.buffer['rewards']
         dones = self.buffer.buffer['dones']
-        
-        num_envs, rollout_length = states.shape[0], states.shape[1]
+
+        rollout_length = self.buffer.buffer_size if self.buffer.full else self.buffer.pos
+        states = states[:, :rollout_length]
+        rewards = rewards[:, :rollout_length]
+        dones = dones[:, :rollout_length]
+
+        num_envs = rewards.shape[0]
+        flat_states = states.reshape(num_envs * rollout_length, *self.observation_space.shape)
 
         with torch.no_grad():
-            values = self.agent.get_value(states.reshape((-1,states.shape[-1]))).squeeze(1).reshape((num_envs, rollout_length)).cpu().numpy()
+            values = self.agent.get_value(flat_states)
+            values = values.reshape(num_envs, rollout_length).cpu().numpy()
+            last_values = self.agent.get_value(self.observations).squeeze(1).cpu().numpy()
 
-        delta = np.zeros((num_envs,),dtype=np.float32)
-        last_advan = np.zeros((num_envs,),dtype=np.float32)
-        with torch.no_grad():
-            last_value = self.agent.get_value(self.observations).squeeze(1).cpu().numpy()
-        advantages = np.zeros((num_envs,rollout_length),dtype=np.float32)
+        advantages = np.zeros_like(rewards, dtype=np.float32)
+        last_gae_lam = np.zeros(num_envs, dtype=np.float32)
 
-        for i in range(rollout_length-1,-1,-1):
-            delta = rewards[:,i] + self.gamma*(1-dones[:,i])*last_value - values[:,i]
-            advantages[:,i] = delta + self.gamma*self.lambda_*(1-dones[:,i])*last_advan
-            
-            
-            last_value = values[:,i]
-            last_advan = advantages[:,i]
+        for step in reversed(range(rollout_length)):
+            if step == rollout_length - 1:
+                next_values = last_values
+            else:
+                next_values = values[:, step + 1]
+
+            non_terminal = 1.0 - dones[:, step]
+            delta = rewards[:, step] + self.gamma * next_values * non_terminal - values[:, step]
+            last_gae_lam = delta + self.gamma * self.lambda_ * non_terminal * last_gae_lam
+            advantages[:, step] = last_gae_lam
+
         returns = advantages + values
-        return returns, advantages
+        return advantages, returns
+        
 
         
     def _update_policy(self):
+        # TODO: implement the updating procedure according to the TRPO algorithm 
         with Result("train") as result:
-            # get transitions
+
+        # 1.compute the advantages and returns from the trajectory or rollout buffer
             if self.collect_traj:
-                states, actions, masks, old_log_probs = self.traj_rollout.states, self.traj_rollout.actions, self.traj_rollout.masks, self.traj_rollout.log_probs
-                returns, advantages = self.compute_advantages_from_traj()
-            
-                states = states.reshape((-1,states.shape[-1]))
-                actions = actions.reshape((-1,actions.shape[-1]))
-                masks = masks.reshape((-1))
-                old_log_probs = old_log_probs.reshape((-1))
-                advantages = advantages.reshape((-1))
-                returns = returns.reshape((-1))
-
-                # remove the padding
-                masks = masks==1
-                states = states[masks]
-                actions = actions[masks]
-                old_log_probs = old_log_probs[masks]
-                advantages = advantages[masks]
-                returns = returns[masks]
+                advantages, returns = self.compute_advantages_from_traj()
+                valid_steps = self.traj_rollout.masks.astype(bool)
+                states = self.traj_rollout.states[valid_steps]
+                actions = self.traj_rollout.actions[valid_steps]
+                old_log_probs = self.traj_rollout.log_probs[valid_steps]
             else:
-                states, actions, old_log_probs = self.buffer.buffer['states'], self.buffer.buffer['actions'], self.buffer.buffer['log_probs']
+                advantages, returns = self.compute_advantages_from_rollout()
+                rollout_length = self.buffer.buffer_size if self.buffer.full else self.buffer.pos
+                states = self.buffer.buffer['states'][:, :rollout_length].reshape(-1, *self.observation_space.shape)
+                actions = self.buffer.buffer['actions'][:, :rollout_length].reshape(-1, self.action_dim)
+                old_log_probs = self.buffer.buffer['log_probs'][:, :rollout_length].reshape(-1)
 
-                returns, advantages = self.compute_advantages_from_rollout()
-                states = states.reshape((-1,states.shape[-1]))
-                actions = actions.reshape((-1,actions.shape[-1]))
-                old_log_probs = old_log_probs.reshape((-1))
-                advantages = advantages.reshape((-1))
-                returns = returns.reshape((-1))
+            states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+            actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
+            old_log_probs = torch.as_tensor(old_log_probs, dtype=torch.float32, device=self.device)
+            advantages = torch.as_tensor(advantages.reshape(-1), dtype=torch.float32, device=self.device)
+            returns = torch.as_tensor(returns.reshape(-1), dtype=torch.float32, device=self.device)
+            raw_advantages = advantages.clone()
 
-
-
-            states = torch.from_numpy(states).float().to(self.device)
-            actions = torch.from_numpy(actions).float().to(self.device)
-            old_log_probs = torch.from_numpy(old_log_probs).float().to(self.device)
-            advantages = torch.from_numpy(advantages).float().to(self.device)
-            returns = torch.from_numpy(returns).float().to(self.device)
-
+        # remember to do the advantage normalization to stabilize the training 
             if self.advan_norm:
-                advantages = (advantages-advantages.mean())/advantages.std()
+                adv_std = advantages.std(unbiased=False)
+                if torch.isfinite(adv_std).item() and adv_std.item() > 1e-8:
+                    advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
+                else:
+                    advantages = advantages - advantages.mean()
 
 
-
-            log_prob = self.agent.log_prob(states,actions)
-
-            ratios = (log_prob - old_log_probs).exp()
-
-            surrogate_target = torch.mean(ratios*advantages) 
-
-            surrogate_gradient = get_flat_grad(surrogate_target, self.agent.actor).detach() # retain_graph=True
-
-            dist = self.agent.dist(states)
+        # 2.use conjugate_gradients to compute the gradient direction and stepsize (some mathematical methods are implemented in utils/utils.py)
             with torch.no_grad():
-                old_dist = self.agent.dist(states)
-            
-            kl = kl_divergence(old_dist, dist).mean()
+                old_mu, old_std = self.agent.actor(states)
+                old_mu, old_std = old_mu.detach(), old_std.detach()
 
-            kl_grad = get_flat_grad(kl, self.agent.actor, create_graph=True)
+            def surrogate_target():
+                log_probs = self.agent.log_prob(states, actions)
+                ratio = torch.exp(log_probs - old_log_probs)
+                return torch.mean(ratio * advantages)
 
-            gradient_direction = conjugate_gradients(self.agent.actor,surrogate_gradient, kl_grad, self.cg_steps)
-            
-            stepsize = torch.sqrt(
-                2*self.delta / (   torch.sum(gradient_direction*kl_product(gradient_direction,kl_grad,self.agent.actor))   )
-                                )
+            def mean_kl():
+                mu, std = self.agent.actor(states)
+                kl = torch.log(std / old_std) + (old_std.pow(2) + (old_mu - mu).pow(2)) / (2.0 * std.pow(2)) - 0.5
+                return torch.sum(kl, dim=1).mean()
 
-
-            # linesearch
-
+            old_surrogate_target = surrogate_target().detach()
             with torch.no_grad():
-                backtrack_step = 0
-                flat_params = get_model_flat_parameters(self.agent.actor)
-                for i in range(self.backtracking_steps):
-                    new_parameter = flat_params + stepsize*gradient_direction
+                initial_log_probs = self.agent.log_prob(states, actions)
+                initial_ratio = torch.exp(initial_log_probs - old_log_probs)
+                initial_log_prob_diff = initial_log_probs - old_log_probs
 
-                    load_flat_parameters_to_model(new_parameter, self.agent.actor)
-                    new_dist = self.agent.dist(states)
-                    new_log_prob = new_dist.log_prob(actions)
-                    new_ratios = (new_log_prob-old_log_probs).exp()
-                    new_surrogate_target = torch.mean(new_ratios*advantages)
+            policy_gradient = get_flat_grad(surrogate_target(), self.agent.actor, retain_graph=True).detach()
+            policy_gradient_norm = torch.norm(policy_gradient, p=2)
+            actor_update_valid = torch.isfinite(policy_gradient_norm).item() and policy_gradient_norm.item() > 1e-12
 
-                    new_kl = kl_divergence(old_dist, new_dist).mean()
-                    
-                    if new_surrogate_target>surrogate_target and new_kl < self.delta:
-                        backtrack_step = i
+            kl_grad = get_flat_grad(mean_kl(), self.agent.actor, create_graph=True)
+            if actor_update_valid:
+                gradient_direction = conjugate_gradients(self.agent.actor, policy_gradient, kl_grad, self.cg_steps)
+                xHx = torch.sum(gradient_direction * kl_product(gradient_direction, kl_grad, self.agent.actor))
+                if not torch.isfinite(xHx) or xHx <= 1e-12:
+                    actor_update_valid = False
+            if actor_update_valid:
+                stepsize = torch.sqrt(2.0 * self.delta / xHx)
+            else:
+                gradient_direction = torch.zeros_like(policy_gradient)
+                xHx = torch.zeros((), device=self.device)
+                stepsize = torch.zeros((), device=self.device)
+        
+
+        # 3.linesearch to find the best stepsize along the gradient direction that can satisfy the KL constraint and improve the surrogate target
+            old_parameter = get_model_flat_parameters(self.agent.actor).detach()
+            new_parameter = old_parameter.clone()
+            new_surrogate_target = old_surrogate_target
+            new_kl = torch.zeros((), device=self.device)
+            backtrack_step = self.backtracking_steps
+            accepted = False
+
+            if actor_update_valid:
+                for step in range(self.backtracking_steps):
+                    backtrack_coeffient = self.linesearch_coeffient ** step
+                    candidate_parameter = old_parameter + backtrack_coeffient * stepsize * gradient_direction
+                    load_flat_parameters_to_model(candidate_parameter, self.agent.actor)
+
+                    with torch.no_grad():
+                        candidate_surrogate_target = surrogate_target()
+                        candidate_kl = mean_kl()
+
+                    if (
+                        torch.isfinite(candidate_kl)
+                        and torch.isfinite(candidate_surrogate_target)
+                        and candidate_kl <= self.delta
+                        and candidate_surrogate_target > old_surrogate_target
+                    ):
+                        new_parameter = candidate_parameter
+                        new_surrogate_target = candidate_surrogate_target
+                        new_kl = candidate_kl
+                        backtrack_step = step
+                        accepted = True
                         break
-                    
-                    stepsize *= self.linesearch_coeffient
-                    if i==self.backtracking_steps-1:
-                        backtrack_step = i
-                        load_flat_parameters_to_model(flat_params,self.agent.actor)
-            
-            # update the value function 
-            dataset_size = states.size(0)
-            batch_size = min(self.critic_batch_size, dataset_size)
 
+            load_flat_parameters_to_model(new_parameter if accepted else old_parameter, self.agent.actor)
+
+        # 4.update the value function with MSE loss, remember to sample batch and update self.critic_update_steps epochs
+            value_loss = torch.zeros((), device=self.device)
+            data_size = states.shape[0]
             for _ in range(self.critic_update_steps):
-                indices = torch.randperm(dataset_size, device=states.device)
+                batch_indices = torch.randint(0, data_size, (self.critic_batch_size,), device=self.device)
+                value = self.agent.get_value(states[batch_indices]).squeeze(1)
+                value_loss = torch.mean((value - returns[batch_indices]) ** 2)
+                self.optimizer.zero_grad()
+                value_loss.backward()
+                self.optimizer.step()
 
-                for start in range(0, dataset_size, batch_size):
-                    batch_idx = indices[start:start + batch_size]
-                    batch_states = states[batch_idx]
-                    batch_returns = returns[batch_idx]
+            self.gradient_step += 1
 
-                    values = self.agent.get_value(batch_states).squeeze(1)
-                    value_loss = ((values - batch_returns) ** 2).mean()
-
-                    self.optimizer.zero_grad()
-                    value_loss.backward()
-                    # torch.nn.utils.clip_grad_norm_(self.agent.critic.parameters(), 1.0)
-                    self.optimizer.step()
 
 
         result.add_metric("value/loss", value_loss.item())
         result.add_metric("actor/backtrack_step",backtrack_step)
+        result.add_metric("actor/accepted",float(accepted))
+        result.add_metric("actor/old_surrogate_target",old_surrogate_target.item())
         result.add_metric("actor/new_surrogate_target",new_surrogate_target.item())
         result.add_metric("actor/new_kl",new_kl.item())
-        if not self.advan_norm:
-            result.add_metric("actor/adv_mean", advantages.mean().item())
-            result.add_metric("actor/adv_max", torch.max(advantages).item())
-        result.add_metric("actor/xHx",torch.sum(gradient_direction*kl_product(gradient_direction,kl_grad,self.agent.actor)).item())
+        result.add_metric("actor/raw_adv_mean", raw_advantages.mean().item())
+        result.add_metric("actor/raw_adv_std", raw_advantages.std(unbiased=False).item())
+        result.add_metric("actor/raw_adv_min", raw_advantages.min().item())
+        result.add_metric("actor/raw_adv_max", raw_advantages.max().item())
+        result.add_metric("actor/adv_mean", advantages.mean().item())
+        result.add_metric("actor/adv_std", advantages.std(unbiased=False).item())
+        result.add_metric("actor/adv_min", advantages.min().item())
+        result.add_metric("actor/adv_max", advantages.max().item())
+        result.add_metric("actor/old_log_prob_mean", old_log_probs.mean().item())
+        result.add_metric("actor/old_log_prob_std", old_log_probs.std().item())
+        result.add_metric("actor/log_prob_mean", initial_log_probs.mean().item())
+        result.add_metric("actor/log_prob_std", initial_log_probs.std().item())
+        result.add_metric("actor/log_prob_diff_abs_max", initial_log_prob_diff.abs().max().item())
+        result.add_metric("actor/ratio_mean", initial_ratio.mean().item())
+        result.add_metric("actor/ratio_std", initial_ratio.std().item())
+        result.add_metric("actor/policy_gradient_l2norm",policy_gradient_norm.item())
+        result.add_metric("actor/xHx",xHx.item())
         result.add_metric("actor/stepsize",stepsize.item())
         result.add_metric("actor/gradient_direction_l2norm",torch.norm(gradient_direction,p=2).item())
         result.add_metric("actor/new_param_l2norm",torch.norm(new_parameter).item())

@@ -126,7 +126,7 @@ def get_flat_grad(y: torch.Tensor, model: nn.Module, **kwargs: Any) -> torch.Ten
 
 
 def kl_product(vector: torch.Tensor, kl_grad:torch.Tensor, model: nn.Module):
-    """ We compute \delta^2 kl@vector = \delta(\delta kl@vector) instead of calculate the \delta^2 kl because its complexity is O(n^2) """
+    r""" We compute \delta^2 kl@vector = \delta(\delta kl@vector) instead of calculate the \delta^2 kl because its complexity is O(n^2) """
     _sum = torch.sum(vector*kl_grad)
     product =  get_flat_grad(_sum, model, retain_graph=True).detach()
     return product + vector* 0.1 # This is equal to add 0.1 to the eigenvalue of Hessian matrix
@@ -149,11 +149,14 @@ def conjugate_gradients(
     rdotr = r.dot(r)
     for _ in range(nsteps):
         z = kl_product(p, flat_kl_grad,model)
-        alpha = rdotr / p.dot(z)
+        denominator = p.dot(z)
+        if not torch.isfinite(denominator) or torch.abs(denominator) < 1e-12:
+            break
+        alpha = rdotr / denominator
         x += alpha * p
         r -= alpha * z
         new_rdotr = r.dot(r)
-        if new_rdotr < residual_tol:
+        if not torch.isfinite(new_rdotr) or new_rdotr < residual_tol:
             break
         p = r + (new_rdotr / rdotr) * p
         rdotr = new_rdotr
